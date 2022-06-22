@@ -1,4 +1,4 @@
-use std::{collections::HashSet, error::Error, fs::read_dir, path::PathBuf};
+use std::{collections::HashSet, error::Error, fs::read_dir, ops::Deref, path::PathBuf};
 
 use csv::Reader;
 use egui::{ProgressBar, RichText, Visuals};
@@ -10,6 +10,11 @@ use crate::{
     data_prefetcher::{DataLoader, Image},
 };
 
+enum InputKind {
+    Dir,
+    Csv,
+}
+
 pub struct ImagePicker {
     current_image: Option<Image>,
 
@@ -17,6 +22,8 @@ pub struct ImagePicker {
 
     category: CategoriesHolder,
     output_dir: PathBuf,
+
+    input_kind: InputKind,
 }
 
 impl ImagePicker {
@@ -37,6 +44,10 @@ impl ImagePicker {
         let mut category_tree = CategoriesHolder::from(categories);
         category_tree.load_paths(&output_dir)?;
 
+        let input_kind = match &input {
+            Input::Dir { root: _ } => InputKind::Dir,
+            Input::Csv { ds: _, root: _ } => InputKind::Csv,
+        };
         let paths = make_image_list(input, category_tree.get_paths())?;
 
         Ok(Self {
@@ -46,6 +57,8 @@ impl ImagePicker {
 
             category: category_tree,
             output_dir,
+
+            input_kind,
         })
     }
 
@@ -85,7 +98,20 @@ impl eframe::App for ImagePicker {
             if let Some(image) = self.current_image.as_ref() {
                 if let Ok(buffer) = &image.buffer {
                     ui.vertical_centered(|ui| {
-                        ui.heading(image.source.clone().to_str().unwrap_or_default());
+                        let image_path = image.source.clone();
+                        let path = match self.input_kind {
+                            InputKind::Dir => image_path
+                                .iter()
+                                .rev()
+                                .take(2)
+                                .collect::<PathBuf>()
+                                .iter()
+                                .rev()
+                                .collect::<PathBuf>(),
+                            InputKind::Csv => image_path,
+                        };
+
+                        ui.heading(path.to_str().unwrap_or_default());
                         ui.label(RichText::new(format!(
                             "{} left",
                             self.compute_nb_images_remaning()
