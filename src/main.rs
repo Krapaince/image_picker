@@ -4,7 +4,8 @@ use env_logger::Builder;
 mod app;
 mod category;
 mod config;
-mod data_prefetcher;
+mod data_loader;
+mod progression;
 
 use std::{convert::TryFrom, error::Error, path::Path};
 

@@ -1,4 +1,4 @@
-use std::{collections::HashSet, error::Error, fs::read_dir, ops::Deref, path::PathBuf};
+use std::{collections::HashSet, error::Error, fs::read_dir, path::PathBuf};
 
 use csv::Reader;
 use egui::{ProgressBar, RichText, Visuals};
@@ -7,7 +7,8 @@ use log::info;
 use crate::{
     category::CategoriesHolder,
     config::{Config, Input},
-    data_prefetcher::{DataLoader, Image},
+    data_loader::{DataLoader, Image},
+    progression::Progression,
 };
 
 enum InputKind {
@@ -24,6 +25,8 @@ pub struct ImagePicker {
     output_dir: PathBuf,
 
     input_kind: InputKind,
+
+    progression: Progression,
 }
 
 impl ImagePicker {
@@ -49,6 +52,7 @@ impl ImagePicker {
             Input::Csv { ds: _, root: _ } => InputKind::Csv,
         };
         let paths = make_image_list(input, category_tree.get_paths())?;
+        let progression = Progression::new(paths.len());
 
         Ok(Self {
             current_image: None,
@@ -59,6 +63,8 @@ impl ImagePicker {
             output_dir,
 
             input_kind,
+
+            progression,
         })
     }
 
@@ -74,14 +80,9 @@ impl ImagePicker {
 
     fn read_next_image(&mut self) {
         self.current_image = self.dataloader.read_current();
-    }
-
-    fn compute_progression(&self) -> f32 {
-        self.dataloader.current() as f32 / self.dataloader.len() as f32
-    }
-
-    fn compute_nb_images_remaning(&self) -> usize {
-        self.dataloader.len() - self.dataloader.current()
+        if self.current_image.is_some() {
+            self.progression.step();
+        }
     }
 }
 
@@ -96,39 +97,38 @@ impl eframe::App for ImagePicker {
             });
         egui::CentralPanel::default().show(ctx, |ui| {
             if let Some(image) = self.current_image.as_ref() {
-                if let Ok(buffer) = &image.buffer {
-                    ui.vertical_centered(|ui| {
-                        let image_path = image.source.clone();
-                        let path = match self.input_kind {
-                            InputKind::Dir => image_path
-                                .iter()
-                                .rev()
-                                .take(2)
-                                .collect::<PathBuf>()
-                                .iter()
-                                .rev()
-                                .collect::<PathBuf>(),
-                            InputKind::Csv => image_path,
-                        };
+                ui.vertical_centered(|ui| {
+                    let image_path = image.source.clone();
+                    let path = match self.input_kind {
+                        InputKind::Dir => image_path
+                            .iter()
+                            .rev()
+                            .take(2)
+                            .collect::<PathBuf>()
+                            .iter()
+                            .rev()
+                            .collect::<PathBuf>(),
+                        InputKind::Csv => image_path,
+                    };
 
-                        ui.heading(path.to_str().unwrap_or_default());
-                        ui.label(RichText::new(format!(
-                            "{} left",
-                            self.compute_nb_images_remaning()
-                        )));
+                    ui.heading(path.to_str().unwrap_or_default());
+                    ui.label(RichText::new(format!(
+                        "{} left",
+                        self.progression.get_nb_remaining_step()
+                    )));
 
-                        ui.add(ProgressBar::new(self.compute_progression()));
-                    });
+                    ui.add(ProgressBar::new(self.progression.compute_progress()));
+                });
 
-                    ui.with_layout(
-                        egui::Layout::top_down_justified(egui::Align::Center),
-                        |ui| {
-                            let factors = ui.available_size() / buffer.size_vec2();
+                ui.with_layout(
+                    egui::Layout::top_down_justified(egui::Align::Center),
+                    |ui| {
+                        let buffer = &image.buffer;
+                        let factors = ui.available_size() / buffer.size_vec2();
 
-                            buffer.show_scaled(ui, factors.min_elem());
-                        },
-                    );
-                }
+                        buffer.show_scaled(ui, factors.min_elem());
+                    },
+                );
                 self.handle_current();
             } else {
                 self.read_next_image();
