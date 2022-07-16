@@ -143,7 +143,7 @@ impl eframe::App for ImagePicker {
     fn on_exit(&mut self, _gl: &eframe::glow::Context) {
         self.category
             .export_paths(&self.output_dir)
-            .map_err(|e| println!("{:?}", e));
+            .map_err(|e| error!("{:?}", e));
     }
 }
 
