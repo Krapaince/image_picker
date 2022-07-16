@@ -91,7 +91,8 @@ impl eframe::App for ImagePicker {
         egui::SidePanel::new(egui::panel::Side::Left, "Categories tree")
             .resizable(true)
             .show(ctx, |ui| {
-                ui.horizontal_wrapped(|ui| {
+                ui.label("Categories");
+                ui.vertical(|ui| {
                     self.category.update(ctx, ui);
                 });
             });
