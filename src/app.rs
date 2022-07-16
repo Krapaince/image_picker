@@ -1,8 +1,8 @@
 use std::{collections::HashSet, error::Error, fs::read_dir, path::PathBuf};
 
-use csv::Reader;
+use csv::ReaderBuilder;
 use egui::{ProgressBar, RichText, Visuals};
-use log::info;
+use log::{error, info};
 
 use crate::{
     category::CategoriesHolder,
@@ -186,21 +186,25 @@ fn make_image_list(
 
             info!("Loading images from CSV file: {}", csv_path.display());
 
-            let mut rdr = Reader::from_path(csv_path)?;
+            let mut rdr = ReaderBuilder::new()
+                .has_headers(false)
+                .from_path(csv_path)?;
 
             paths.extend(
                 rdr.deserialize()
                     .into_iter()
                     .collect::<Result<Vec<PathBuf>, _>>()?
                     .into_iter()
-                    .filter_map(|x| {
-                        if !x.exists() {
+                    .filter_map(|x| match x.exists() {
+                        false => {
                             info!("{}: doesn't exist. Skipping", x.display());
-
                             None
-                        } else {
-                            Some(x)
                         }
+                        true if paths_to_exclude.get(&x).is_some() => {
+                            nb_removed_paths += 1;
+                            None
+                        }
+                        true => Some(x),
                     })
                     .collect::<Vec<PathBuf>>(),
             );

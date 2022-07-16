@@ -1,7 +1,8 @@
 use super::item::CategoryTreeItem;
 use crate::config::Category;
-use csv::{Reader, Writer};
+use csv::{ReaderBuilder, WriterBuilder};
 use egui::CollapsingHeader;
+use log::info;
 use std::{
     collections::HashSet,
     error::Error,
@@ -21,8 +22,12 @@ impl CategoryTree {
 
         let csv_path = self.item.make_category_path(path);
         let paths = if csv_path.exists() {
-            let mut rdr = Reader::from_path(csv_path)?;
-            rdr.deserialize().into_iter().collect::<Result<_, _>>()?
+            let mut rdr = ReaderBuilder::new()
+                .has_headers(false)
+                .from_path(&csv_path)?;
+            let paths: Vec<PathBuf> = rdr.deserialize().into_iter().collect::<Result<_, _>>()?;
+            info!("Readed {} from {}", paths.len(), csv_path.display());
+            paths
         } else {
             vec![]
         };
@@ -60,14 +65,18 @@ impl CategoryTree {
             .iter()
             .try_for_each(|leaf| leaf.export_paths_inner(output_dir, &mut item_paths))?;
 
-        let mut wdr = Writer::from_path(self.item.make_category_path(output_dir))?;
+        let mut wdr = WriterBuilder::new()
+            .has_headers(false)
+            .from_path(self.item.make_category_path(output_dir))?;
 
         let item_paths = {
             let mut item_paths = item_paths.into_iter().collect::<Vec<_>>();
             item_paths.sort();
             item_paths
         };
-        wdr.serialize(&item_paths)?;
+        for path in &item_paths {
+            wdr.serialize(&path)?;
+        }
 
         parent_paths.extend(item_paths.into_iter());
 
